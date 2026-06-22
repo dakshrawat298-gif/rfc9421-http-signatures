@@ -1,0 +1,2 @@
+- [WebCrypto algorithm types under @types/node](webcrypto-node-types.md) — they live in the `webcrypto` namespace, not as globals; don't derive them via `Parameters<typeof subtle.X>`.
+- [Node test coverage thresholds are percentages](node-test-coverage-thresholds.md) — `--test-coverage-lines=95` means 95%; `0.95` is effectively no gate.

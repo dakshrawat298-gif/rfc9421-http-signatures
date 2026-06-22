@@ -1,0 +1,86 @@
+{
+  "name": "@interledger-aligned/http-message-signatures",
+  "version": "0.1.0",
+  "description": "Standalone, zero-dependency, dual ESM/CJS TypeScript implementation of RFC 9421 (HTTP Message Signatures) with strict compliance and no insecure defaults.",
+  "keywords": [
+    "rfc9421",
+    "http-message-signatures",
+    "http-signatures",
+    "signature",
+    "ed25519",
+    "ecdsa",
+    "rsa-pss",
+    "hmac",
+    "webcrypto",
+    "interledger"
+  ],
+  "license": "Apache-2.0",
+  "author": "Interledger-aligned contributors",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/interledger-aligned/http-message-signatures.git"
+  },
+  "homepage": "https://github.com/interledger-aligned/http-message-signatures#readme",
+  "bugs": {
+    "url": "https://github.com/interledger-aligned/http-message-signatures/issues"
+  },
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "exports": {
+    ".": {
+      "workspace": "./src/index.ts",
+      "types": "./dist/esm/index.d.ts",
+      "import": "./dist/esm/index.js",
+      "require": "./dist/cjs/index.js"
+    },
+    "./sfv": {
+      "workspace": "./src/sfv.ts",
+      "types": "./dist/esm/sfv.d.ts",
+      "import": "./dist/esm/sfv.js",
+      "require": "./dist/cjs/sfv.js"
+    },
+    "./sign": {
+      "workspace": "./src/sign.ts",
+      "types": "./dist/esm/sign.d.ts",
+      "import": "./dist/esm/sign.js",
+      "require": "./dist/cjs/sign.js"
+    },
+    "./verify": {
+      "workspace": "./src/verify.ts",
+      "types": "./dist/esm/verify.d.ts",
+      "import": "./dist/esm/verify.js",
+      "require": "./dist/cjs/verify.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/esm/index.d.ts",
+  "files": [
+    "dist",
+    "src",
+    "LICENSE",
+    "NOTICE",
+    "README.md",
+    "SECURITY.md"
+  ],
+  "scripts": {
+    "build": "pnpm run build:esm && pnpm run build:cjs && pnpm run build:fixup",
+    "build:esm": "tsc -p tsconfig.build.json",
+    "build:cjs": "tsc -p tsconfig.cjs.json",
+    "build:fixup": "node ./scripts/build-fixup.mjs",
+    "clean": "rm -rf dist tsconfig.tsbuildinfo",
+    "test": "node --import tsx --test \"test/**/*.test.ts\"",
+    "test:coverage": "node --import tsx --test --experimental-test-coverage \"test/**/*.test.ts\"",
+    "typecheck": "tsc -p tsconfig.test.json",
+    "validate:fixtures": "node --import tsx ./scripts/validate-fixtures.ts"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "~5.9.3"
+  }
+}
