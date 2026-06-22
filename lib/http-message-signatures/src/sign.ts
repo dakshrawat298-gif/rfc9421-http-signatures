@@ -1,28 +1,41 @@
 /**
  * Public signer — subpath `/sign` (RFC 9421 §3.1, §4.1–4.2).
- *
- * NOTE: scaffold only — orchestration is implemented in Layer 3 (Step 6).
  */
 
-import { NotImplementedError } from "./errors.js";
+import { webcrypto } from "node:crypto";
+
+import { UnsupportedAlgorithmError } from "./errors.js";
+import { buildSignatureBase, serializeSignatureParams, toComponentItem } from "./base.js";
+import { ByteSequence, serializeItem } from "./sfv.js";
+import { webcryptoSignParams } from "./crypto.js";
 import type {
   ComponentSpec,
+  CryptoKey,
   HttpMessage,
   SignOptions,
   SignResult,
+  SignatureAlgorithm,
   SignatureParameters,
+  SigningKey,
 } from "./types.js";
 
-/**
- * Build the RFC 9421 signature base byte string (§2.5) for the given message,
- * covered components, and signature parameters. Low-level escape hatch.
- */
-export function createSignatureBase(
-  _message: HttpMessage,
-  _components: ComponentSpec[],
-  _params: SignatureParameters,
-): string {
-  throw new NotImplementedError("createSignatureBase");
+export { createSignatureBase } from "./base.js";
+
+const te = new TextEncoder();
+
+function isSigningKey(key: SigningKey | CryptoKey): key is SigningKey {
+  return typeof (key as Partial<SigningKey>).sign === "function" && "alg" in key;
+}
+
+async function rawSign(
+  key: CryptoKey,
+  alg: SignatureAlgorithm,
+  data: Uint8Array,
+): Promise<Uint8Array> {
+  const input = new Uint8Array(data.byteLength);
+  input.set(data);
+  const sig = await webcrypto.subtle.sign(webcryptoSignParams(alg), key, input);
+  return new Uint8Array(sig);
 }
 
 /**
@@ -30,8 +43,47 @@ export function createSignatureBase(
  * values (RFC 9421 §3.1).
  */
 export async function signMessage(
-  _message: HttpMessage,
-  _options: SignOptions,
+  message: HttpMessage,
+  options: SignOptions,
 ): Promise<SignResult> {
-  throw new NotImplementedError("signMessage");
+  const components: ComponentSpec[] = options.components;
+  const label = options.label ?? "sig";
+
+  let signFn: (data: Uint8Array) => Promise<Uint8Array> | Uint8Array;
+  let keyKeyid: string | undefined;
+
+  if (isSigningKey(options.key)) {
+    const signer = options.key;
+    keyKeyid = signer.keyid;
+    signFn = (data) => signer.sign(data);
+  } else {
+    if (options.alg === undefined) {
+      throw new UnsupportedAlgorithmError(
+        "signing with a raw CryptoKey requires an explicit `alg` (no insecure default)",
+      );
+    }
+    const cryptoKey = options.key;
+    const chosen = options.alg;
+    signFn = (data) => rawSign(cryptoKey, chosen, data);
+  }
+
+  // Assemble the effective signature parameters (no algorithm is injected
+  // automatically; it is emitted only when the caller sets it explicitly).
+  const params: SignatureParameters = { ...(options.params ?? {}) };
+  if (params.keyid === undefined) {
+    const keyid = options.keyid ?? keyKeyid;
+    if (keyid !== undefined) params.keyid = keyid;
+  }
+
+  const items = components.map(toComponentItem);
+  const signatureParamsLine = serializeSignatureParams(items, params);
+  const base = buildSignatureBase(message, items, signatureParamsLine);
+
+  const signatureBytes = await signFn(te.encode(base));
+  const sigItem = serializeItem({ value: new ByteSequence(signatureBytes), params: new Map() });
+
+  return {
+    signatureInput: `${label}=${signatureParamsLine}`,
+    signature: `${label}=${sigItem}`,
+  };
 }

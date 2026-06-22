@@ -15,3 +15,16 @@ coverage). Verified empirically on Node 24: a ~50%-covered file passes
 
 **How to apply:** when wiring a ">= 95%" coverage gate in CI, use `95`, never
 `0.95`.
+
+## Type-only modules tank global line coverage
+
+`node --experimental-test-coverage` reports a **type-only** module (a file that
+is all `interface`/`type` declarations, e.g. a `types.ts`) as mostly *uncovered*
+— it lists nearly every line as uncovered and shows ~10–15% line coverage, even
+though the emitted JS is effectively empty. This is a measurement artifact, not
+real dead code, and it can drag global line% well below a per-logic-file target
+(e.g. logic files at 94–100% but global ~84%).
+
+**How to apply:** judge coverage on the logic modules, not the global number, or
+exclude type-only files from the report. Do not chase a global ">=95%" by
+gaming a pure-types file — it cannot be "covered" by tests.

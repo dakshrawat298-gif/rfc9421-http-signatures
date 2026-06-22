@@ -6,11 +6,9 @@
  *
  * Amendment A1: Token and String are distinct tagged types and are never
  * coerced into one another, on either parse or serialize.
- *
- * NOTE: scaffold only — parsing/serialization is implemented in Layer 0 (Step 3).
  */
 
-import { NotImplementedError } from "./errors.js";
+import { MalformedSignatureError } from "./errors.js";
 
 /** RFC 8941 §3.3.4 Token (bare, e.g. `foo`, `*`, derived component names). */
 export class Token {
@@ -66,37 +64,362 @@ export type List = ListMember[];
 /** A Dictionary (RFC 8941 §3.2); insertion order is significant. */
 export type Dictionary = Map<string, ListMember>;
 
+// ---------------------------------------------------------------------------
+// Parsing (RFC 8941 §4.2)
+// ---------------------------------------------------------------------------
+
+function fail(message: string): never {
+  throw new MalformedSignatureError(message);
+}
+
+function isDigit(c: string): boolean {
+  return c >= "0" && c <= "9";
+}
+
+function isAlpha(c: string): boolean {
+  return (c >= "a" && c <= "z") || (c >= "A" && c <= "Z");
+}
+
+function isLcAlpha(c: string): boolean {
+  return c >= "a" && c <= "z";
+}
+
+/** tchar per RFC 7230 / RFC 8941 token continuation. */
+const TCHAR = new Set("!#$%&'*+-.^_`|~");
+function isTokenChar(c: string): boolean {
+  return isAlpha(c) || isDigit(c) || TCHAR.has(c) || c === ":" || c === "/";
+}
+
+function isKeyChar(c: string): boolean {
+  return isLcAlpha(c) || isDigit(c) || c === "_" || c === "-" || c === "." || c === "*";
+}
+
+const BASE64_RE = /^[A-Za-z0-9+/]*={0,2}$/;
+
+class Parser {
+  private readonly s: string;
+  private i = 0;
+
+  public constructor(input: string) {
+    this.s = input;
+  }
+
+  private peek(): string {
+    return this.i < this.s.length ? this.s[this.i]! : "";
+  }
+
+  private next(): string {
+    return this.i < this.s.length ? this.s[this.i++]! : "";
+  }
+
+  private eof(): boolean {
+    return this.i >= this.s.length;
+  }
+
+  private skipSP(): void {
+    while (this.peek() === " ") this.i += 1;
+  }
+
+  private skipOWS(): void {
+    while (this.peek() === " " || this.peek() === "\t") this.i += 1;
+  }
+
+  public parseItemTopLevel(): Item {
+    this.skipSP();
+    const item = this.parseItem();
+    this.skipSP();
+    if (!this.eof()) fail("trailing characters after item");
+    return item;
+  }
+
+  public parseListTopLevel(): List {
+    this.skipSP();
+    const list = this.parseList();
+    this.skipSP();
+    if (!this.eof()) fail("trailing characters after list");
+    return list;
+  }
+
+  public parseDictionaryTopLevel(): Dictionary {
+    this.skipSP();
+    const dict = this.parseDictionary();
+    this.skipSP();
+    if (!this.eof()) fail("trailing characters after dictionary");
+    return dict;
+  }
+
+  private parseList(): List {
+    const members: List = [];
+    while (!this.eof()) {
+      members.push(this.parseListMember());
+      this.skipOWS();
+      if (this.eof()) break;
+      if (this.next() !== ",") fail("expected comma between list members");
+      this.skipOWS();
+      if (this.eof()) fail("trailing comma in list");
+    }
+    return members;
+  }
+
+  private parseListMember(): ListMember {
+    if (this.peek() === "(") return this.parseInnerList();
+    return this.parseItem();
+  }
+
+  private parseDictionary(): Dictionary {
+    const dict: Dictionary = new Map();
+    while (!this.eof()) {
+      const key = this.parseKey();
+      let member: ListMember;
+      if (this.peek() === "=") {
+        this.i += 1;
+        member = this.parseListMember();
+      } else {
+        member = { value: true, params: this.parseParameters() };
+      }
+      dict.set(key, member);
+      this.skipOWS();
+      if (this.eof()) break;
+      if (this.next() !== ",") fail("expected comma between dictionary members");
+      this.skipOWS();
+      if (this.eof()) fail("trailing comma in dictionary");
+    }
+    return dict;
+  }
+
+  private parseInnerList(): InnerList {
+    if (this.next() !== "(") fail("expected (");
+    const items: Item[] = [];
+    while (!this.eof()) {
+      this.skipSP();
+      if (this.peek() === ")") {
+        this.i += 1;
+        return { items, params: this.parseParameters() };
+      }
+      items.push(this.parseItem());
+      if (this.peek() !== " " && this.peek() !== ")") fail("expected SP or ) in inner list");
+    }
+    return fail("unterminated inner list");
+  }
+
+  private parseItem(): Item {
+    const value = this.parseBareItem();
+    const params = this.parseParameters();
+    return { value, params };
+  }
+
+  private parseParameters(): Parameters {
+    const params: Parameters = new Map();
+    while (this.peek() === ";") {
+      this.i += 1;
+      this.skipSP();
+      const key = this.parseKey();
+      let value: BareItem = true;
+      if (this.peek() === "=") {
+        this.i += 1;
+        value = this.parseBareItem();
+      }
+      params.set(key, value);
+    }
+    return params;
+  }
+
+  private parseKey(): string {
+    const c = this.peek();
+    if (!isLcAlpha(c) && c !== "*") fail("invalid key start");
+    let out = "";
+    while (!this.eof() && isKeyChar(this.peek())) out += this.next();
+    return out;
+  }
+
+  private parseBareItem(): BareItem {
+    const c = this.peek();
+    if (c === '"') return this.parseString();
+    if (c === ":") return this.parseByteSequence();
+    if (c === "?") return this.parseBoolean();
+    if (c === "-" || isDigit(c)) return this.parseNumber();
+    if (isAlpha(c) || c === "*") return this.parseToken();
+    return fail(`unexpected character '${c}' parsing bare item`);
+  }
+
+  private parseString(): string {
+    if (this.next() !== '"') fail("expected opening quote");
+    let out = "";
+    while (!this.eof()) {
+      const ch = this.next();
+      if (ch === "\\") {
+        const esc = this.next();
+        if (esc !== '"' && esc !== "\\") fail("invalid string escape");
+        out += esc;
+      } else if (ch === '"') {
+        return out;
+      } else {
+        const code = ch.charCodeAt(0);
+        if (code < 0x20 || code > 0x7e) fail("invalid string character");
+        out += ch;
+      }
+    }
+    return fail("unterminated string");
+  }
+
+  private parseToken(): Token {
+    let out = this.next(); // already validated ALPHA / "*"
+    while (!this.eof() && isTokenChar(this.peek())) out += this.next();
+    return new Token(out);
+  }
+
+  private parseNumber(): number | Decimal {
+    let sign = 1;
+    if (this.peek() === "-") {
+      this.i += 1;
+      sign = -1;
+    }
+    if (!isDigit(this.peek())) fail("expected digit in number");
+    let intPart = "";
+    while (!this.eof() && isDigit(this.peek())) intPart += this.next();
+    if (this.peek() !== ".") {
+      if (intPart.length > 15) fail("integer too long");
+      return sign * Number(intPart);
+    }
+    // Decimal
+    if (intPart.length > 12) fail("decimal integer part too long");
+    this.i += 1; // consume "."
+    let fracPart = "";
+    while (!this.eof() && isDigit(this.peek())) fracPart += this.next();
+    if (fracPart.length === 0) fail("decimal missing fractional digits");
+    if (fracPart.length > 3) fail("decimal has more than three fractional digits");
+    return new Decimal(sign * Number(`${intPart}.${fracPart}`));
+  }
+
+  private parseBoolean(): boolean {
+    if (this.next() !== "?") fail("expected ?");
+    const c = this.next();
+    if (c === "1") return true;
+    if (c === "0") return false;
+    return fail("invalid boolean");
+  }
+
+  private parseByteSequence(): ByteSequence {
+    if (this.next() !== ":") fail("expected :");
+    let b64 = "";
+    while (!this.eof() && this.peek() !== ":") b64 += this.next();
+    if (this.next() !== ":") fail("unterminated byte sequence");
+    if (!BASE64_RE.test(b64)) fail("invalid base64 in byte sequence");
+    const bytes = new Uint8Array(Buffer.from(b64, "base64"));
+    // Round-trip guard: reject input that does not re-encode to itself.
+    if (Buffer.from(bytes).toString("base64") !== normalizeB64(b64)) {
+      fail("non-canonical base64 in byte sequence");
+    }
+    return new ByteSequence(bytes);
+  }
+}
+
+function normalizeB64(b64: string): string {
+  // Re-pad so comparison against Buffer's canonical output is fair.
+  const stripped = b64.replace(/=+$/, "");
+  const pad = stripped.length % 4 === 0 ? "" : "=".repeat(4 - (stripped.length % 4));
+  return stripped + pad;
+}
+
 /** Parse a Structured Field Item (RFC 8941 §4.2.3). */
-export function parseItem(_input: string): Item {
-  throw new NotImplementedError("sfv.parseItem");
+export function parseItem(input: string): Item {
+  return new Parser(input).parseItemTopLevel();
 }
 
 /** Parse a Structured Field List (RFC 8941 §4.2.1). */
-export function parseList(_input: string): List {
-  throw new NotImplementedError("sfv.parseList");
+export function parseList(input: string): List {
+  return new Parser(input).parseListTopLevel();
 }
 
 /** Parse a Structured Field Dictionary (RFC 8941 §4.2.2). */
-export function parseDictionary(_input: string): Dictionary {
-  throw new NotImplementedError("sfv.parseDictionary");
+export function parseDictionary(input: string): Dictionary {
+  return new Parser(input).parseDictionaryTopLevel();
+}
+
+// ---------------------------------------------------------------------------
+// Serialization (RFC 8941 §4.1)
+// ---------------------------------------------------------------------------
+
+function serializeDecimal(value: number): string {
+  if (!Number.isFinite(value)) fail("cannot serialize non-finite decimal");
+  // Round to 3 fractional digits, then ensure at least one fractional digit.
+  const rounded = Math.round(value * 1000) / 1000;
+  let out = rounded.toString();
+  if (!out.includes(".")) out += ".0";
+  return out;
 }
 
 /** Serialize a bare item (RFC 8941 §4.1.3). */
-export function serializeBareItem(_value: BareItem): string {
-  throw new NotImplementedError("sfv.serializeBareItem");
+export function serializeBareItem(value: BareItem): string {
+  if (typeof value === "boolean") return value ? "?1" : "?0";
+  if (typeof value === "number") {
+    if (!Number.isInteger(value)) fail("Integer value must be an integer");
+    return String(value);
+  }
+  if (typeof value === "string") {
+    let out = '"';
+    for (const ch of value) {
+      const code = ch.charCodeAt(0);
+      if (code < 0x20 || code > 0x7e) fail("invalid character in string");
+      if (ch === "\\" || ch === '"') out += "\\";
+      out += ch;
+    }
+    return out + '"';
+  }
+  if (value instanceof Token) return value.value;
+  if (value instanceof Decimal) return serializeDecimal(value.value);
+  if (value instanceof ByteSequence) {
+    return `:${Buffer.from(value.bytes).toString("base64")}:`;
+  }
+  return fail("unknown bare item type");
+}
+
+function serializeParameters(params: Parameters): string {
+  let out = "";
+  for (const [key, value] of params) {
+    out += ";" + key;
+    if (value !== true) out += "=" + serializeBareItem(value);
+  }
+  return out;
 }
 
 /** Serialize an Item (RFC 8941 §4.1.3). */
-export function serializeItem(_item: Item): string {
-  throw new NotImplementedError("sfv.serializeItem");
+export function serializeItem(item: Item): string {
+  return serializeBareItem(item.value) + serializeParameters(item.params);
+}
+
+function isInnerList(member: ListMember): member is InnerList {
+  return "items" in member;
+}
+
+function serializeInnerList(list: InnerList): string {
+  return "(" + list.items.map(serializeItem).join(" ") + ")" + serializeParameters(list.params);
+}
+
+function serializeMember(member: ListMember): string {
+  return isInnerList(member) ? serializeInnerList(member) : serializeItem(member);
 }
 
 /** Serialize a List (RFC 8941 §4.1.1). */
-export function serializeList(_list: List): string {
-  throw new NotImplementedError("sfv.serializeList");
+export function serializeList(list: List): string {
+  return list.map(serializeMember).join(", ");
 }
 
 /** Serialize a Dictionary (RFC 8941 §4.1.2). */
-export function serializeDictionary(_dict: Dictionary): string {
-  throw new NotImplementedError("sfv.serializeDictionary");
+export function serializeDictionary(dict: Dictionary): string {
+  const parts: string[] = [];
+  for (const [key, member] of dict) {
+    if (!isInnerList(member) && member.value === true) {
+      parts.push(key + serializeParameters(member.params));
+    } else {
+      parts.push(key + "=" + serializeMember(member));
+    }
+  }
+  return parts.join(", ");
 }
+
+/** Internal: serialize an InnerList (used by the signature-base layer). */
+export { serializeInnerList };
+
+/** Internal: serialize an SFV parameter map (used by the signature-base layer). */
+export { serializeParameters };
