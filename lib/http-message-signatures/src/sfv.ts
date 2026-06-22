@@ -342,11 +342,30 @@ export function parseDictionary(input: string): Dictionary {
 
 function serializeDecimal(value: number): string {
   if (!Number.isFinite(value)) fail("cannot serialize non-finite decimal");
-  // Round to 3 fractional digits, then ensure at least one fractional digit.
-  const rounded = Math.round(value * 1000) / 1000;
-  let out = rounded.toString();
+  // RFC 8941 §3.3.2 data model: at most 12 integer digits.
+  if (Math.abs(value) >= 1e12) fail("decimal integer part exceeds the 12-digit limit");
+  // Strict serialization: reject values that cannot be represented exactly with
+  // at most three fractional digits rather than silently rounding, which would
+  // alter the signed canonical bytes.
+  const scaled = value * 1000;
+  if (Math.abs(scaled - Math.round(scaled)) > 1e-9) {
+    fail("decimal exceeds the three fractional-digit limit");
+  }
+  let out = (Math.round(scaled) / 1000).toString();
   if (!out.includes(".")) out += ".0";
   return out;
+}
+
+/** Validate and serialize a Token (RFC 8941 §4.1.9): ALPHA/"*" start, tchar/":"/"/" rest. */
+function serializeToken(value: string): string {
+  const first = value[0];
+  if (first === undefined || (!isAlpha(first) && first !== "*")) {
+    fail("token must start with an ALPHA character or '*'");
+  }
+  for (const c of value) {
+    if (!isTokenChar(c)) fail(`invalid token character: ${JSON.stringify(c)}`);
+  }
+  return value;
 }
 
 /** Serialize a bare item (RFC 8941 §4.1.3). */
@@ -366,7 +385,7 @@ export function serializeBareItem(value: BareItem): string {
     }
     return out + '"';
   }
-  if (value instanceof Token) return value.value;
+  if (value instanceof Token) return serializeToken(value.value);
   if (value instanceof Decimal) return serializeDecimal(value.value);
   if (value instanceof ByteSequence) {
     return `:${Buffer.from(value.bytes).toString("base64")}:`;

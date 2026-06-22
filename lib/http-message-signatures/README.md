@@ -149,7 +149,7 @@ coverage gate enforces >= 95% line/function and >= 90% branch coverage over
 | -------------------------------------- | -------------------- | --------------------------- | -------- |
 | Structured Field Values (parse + serialize) | RFC 8941        | `sfv.spec`, `sfv-coverage.spec` | passing |
 | Derived components                     | RFC 9421 §2.2        | `derived.spec`, `base-coverage.spec` | passing |
-| HTTP field components (`sf`/`bs`/`key`/`req`) | RFC 9421 §2.1   | `fields.spec`, `base-coverage.spec` | passing |
+| HTTP field components (`sf`/`bs`/`key`/`req`/`tr`) | RFC 9421 §2.1   | `fields.spec`, `base-coverage.spec` | passing |
 | Signature base construction            | RFC 9421 §2.5        | `signature-base.spec`       | passing  |
 | Appendix B test vectors                | RFC 9421 App. B.2–B.3| `vectors.spec`              | passing  |
 | Sign → verify round-trip (all algs)    | RFC 9421 §3.1–3.2    | `roundtrip.spec`, `rawkey.spec` | passing |

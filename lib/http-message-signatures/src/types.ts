@@ -32,12 +32,16 @@ export interface RequestLike {
   method: string;
   url: string | URL;
   headers: HttpHeaders;
+  /** Trailer-section fields, for components carrying `;tr` (RFC 9421 §2.1.1). */
+  trailers?: HttpHeaders;
 }
 
 /** Normalized response component context (RFC 9421 §2.2.9, §2.4 for `;req`). */
 export interface ResponseLike {
   status: number;
   headers: HttpHeaders;
+  /** Trailer-section fields, for components carrying `;tr` (RFC 9421 §2.1.1). */
+  trailers?: HttpHeaders;
   /** The request that produced this response, for components carrying `;req`. */
   relatedRequest?: RequestLike;
 }

@@ -181,9 +181,15 @@ function reserializeStructured(value: string): string {
 
 function fieldValue(message: HttpMessage, item: Item, name: string): string {
   const source = getSource(message, item);
-  const raw = source.headers[name];
+  // RFC 9421 §2.1.1: `;tr` covers a field carried in the trailer section, which
+  // is a map distinct from the header section.
+  const isTrailer = item.params.has("tr");
+  const fields = isTrailer ? source.trailers ?? {} : source.headers;
+  const raw = fields[name];
   if (raw === undefined) {
-    throw new UnsupportedComponentError(`covered field "${name}" is not present`);
+    throw new UnsupportedComponentError(
+      `covered ${isTrailer ? "trailer" : "field"} "${name}" is not present`,
+    );
   }
   const values = (Array.isArray(raw) ? raw : [raw]).map(trimOWS);
 

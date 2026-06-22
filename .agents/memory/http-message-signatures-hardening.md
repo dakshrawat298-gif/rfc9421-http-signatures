@@ -40,3 +40,31 @@ the parser-ambiguity attack surface.
 `policy.clockTolerance` must be validated as a finite, non-negative number
 (reject `NaN`/`Infinity`/negative with `RangeError`); default is `5` seconds.
 Invalid tolerance silently distorts time checks otherwise.
+
+# Trailer (`;tr`) components read a separate field map
+
+A component carrying `;tr` MUST be canonicalized from a distinct trailer
+section (`RequestLike.trailers` / `ResponseLike.trailers`), never from the
+headers map. A `;tr` field absent from `trailers` (even if present in headers)
+is "not present" and must throw.
+
+**Why:** Treating `;tr` as a no-op alias for the header lookup is a
+canonicalization/security gap — the signer's intent (trailer vs header) is part
+of the signed component identifier and the two sections are semantically
+different. Flagged in review.
+
+**How to apply:** `;tr` and `;req` compose (`getSource` picks request-vs-self,
+then the tr branch picks trailers-vs-headers). Appendix B vectors use no
+trailers, so this doesn't touch published fixtures.
+
+# Strict SFV serialization (no silent coercion)
+
+The serializer must reject out-of-data-model values rather than coercing them:
+`serializeDecimal` rejects >12 integer digits and anything not exactly
+representable in ≤3 fractional digits (do NOT round); `serializeToken`
+validates the RFC 8941 token grammar (ALPHA/`*` start, tchar/`:`/`/` rest).
+
+**Why:** Silent rounding/coercion changes the canonical bytes that get signed,
+producing signatures that don't match what the caller asked for — a correctness
+and cross-impl risk. Parsing strictness without serialization strictness is a
+half-measure flagged in review.

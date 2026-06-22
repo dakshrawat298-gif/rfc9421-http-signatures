@@ -119,6 +119,21 @@ describe("SFV serializer: branches and errors", () => {
     assert.equal(serializeItem(item(new Decimal(4))), "4.0");
   });
 
+  test("decimal exceeding three fractional digits is rejected, not rounded", () => {
+    assert.throws(() => serializeItem(item(new Decimal(1.2345))), MalformedSignatureError);
+  });
+
+  test("decimal exceeding the 12-digit integer limit is rejected", () => {
+    assert.throws(() => serializeItem(item(new Decimal(1e12))), MalformedSignatureError);
+  });
+
+  test("token serialization validates the RFC 8941 grammar", () => {
+    assert.equal(serializeItem(item(new Token("*foo:/bar"))), "*foo:/bar");
+    assert.throws(() => serializeItem(item(new Token(""))), MalformedSignatureError);
+    assert.throws(() => serializeItem(item(new Token("1bad"))), MalformedSignatureError);
+    assert.throws(() => serializeItem(item(new Token("has space"))), MalformedSignatureError);
+  });
+
   test("string serialization rejects control characters", () => {
     assert.throws(
       () => serializeItem(item(`x${String.fromCharCode(1)}`)),

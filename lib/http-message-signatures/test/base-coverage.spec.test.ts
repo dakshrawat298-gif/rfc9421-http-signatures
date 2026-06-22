@@ -29,6 +29,9 @@ const REQ: RequestLike = {
     "x-multi": ["one", "two"],
     "content-type": "application/json",
   },
+  trailers: {
+    "x-trailer": ["one", "two"],
+  },
 };
 
 function lineFor(message: HttpMessage, spec: ComponentSpec): string {
@@ -132,8 +135,23 @@ describe("field components and parameters", () => {
     assert.equal(lineFor(msg, { name: "x-list", params: { sf: true } }), '"x-list";sf: 1, 2, 3');
   });
 
-  test(";tr marks a component as a trailer", () => {
-    assert.equal(lineFor(REQ, { name: "x-multi", params: { tr: true } }), '"x-multi";tr: one, two');
+  test(";tr canonicalizes from the trailer section, not the headers", () => {
+    assert.equal(lineFor(REQ, { name: "x-trailer", params: { tr: true } }), '"x-trailer";tr: one, two');
+  });
+
+  test(";tr for a field that is only in the header section is rejected", () => {
+    assert.throws(
+      () => lineFor(REQ, { name: "x-multi", params: { tr: true } }),
+      UnsupportedComponentError,
+    );
+  });
+
+  test(";tr for a message with no trailers is rejected", () => {
+    const { trailers: _omit, ...noTrailers } = REQ;
+    assert.throws(
+      () => lineFor(noTrailers, { name: "x-trailer", params: { tr: true } }),
+      UnsupportedComponentError,
+    );
   });
 
   test(";key selects a dictionary member", () => {
