@@ -12,26 +12,25 @@ so correctness and a disciplined, test-first process matter more than speed.
 
 ```sh
 pnpm install
-pnpm typecheck          # strict type-check of src, tests, and scripts
-pnpm test               # run the full test suite
-pnpm validate:fixtures  # verify the RFC 9421 Appendix B fixtures
+pnpm typecheck             # strict type-check of src, tests, and scripts
+pnpm test                  # run the full test suite
+pnpm test:coverage:check   # enforce the coverage gate over src/
+pnpm validate:fixtures     # verify the RFC 9421 Appendix B fixtures
 ```
 
 ## Test-first (TDD) workflow
 
-This project is built strictly test-first. The expectation is **red → green**:
+This project is built test-first. When adding a feature or fixing a bug, add or
+extend a test that captures the desired behavior, then make it pass:
 
 1. The RFC 9421 Appendix B fixtures are encoded under `test/fixtures/` and are
    independently validated against the published RFC keys by
    `scripts/validate-fixtures.ts`. **Fixtures are ground truth — do not edit a
    fixture to make a test pass.**
-2. Behavior is specified by failing tests *before* the implementation exists.
-   Each RFC area has a dedicated suite (`*.spec.test.ts`).
-3. Implementation is then added layer by layer to turn suites green, without
-   weakening the specs.
-
-When adding a feature or fixing a bug, add or extend a failing test first, then
-make it pass.
+2. Behavior is specified by tests, with a dedicated suite per RFC area
+   (`*.spec.test.ts`). New behavior must come with new or extended tests.
+3. Coverage is gated in CI (>= 95% line/function, >= 90% branch over `src/`).
+   Keep new code covered; do not weaken existing specs to pass.
 
 ## Coding standards
 
@@ -54,7 +53,8 @@ make it pass.
 Before opening a PR, ensure:
 
 - [ ] `pnpm typecheck` passes
-- [ ] `pnpm test` passes (or new specs are intentionally red and clearly noted)
+- [ ] `pnpm test` passes
+- [ ] `pnpm test:coverage:check` passes (coverage gate)
 - [ ] `pnpm validate:fixtures` passes
 - [ ] New behavior is covered by tests
 - [ ] No new runtime dependencies were added

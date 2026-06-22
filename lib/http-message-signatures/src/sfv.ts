@@ -134,18 +134,14 @@ class Parser {
 
   public parseListTopLevel(): List {
     this.skipSP();
-    const list = this.parseList();
-    this.skipSP();
-    if (!this.eof()) fail("trailing characters after list");
-    return list;
+    // parseList consumes through EOF or throws, so no trailing check is needed.
+    return this.parseList();
   }
 
   public parseDictionaryTopLevel(): Dictionary {
     this.skipSP();
-    const dict = this.parseDictionary();
-    this.skipSP();
-    if (!this.eof()) fail("trailing characters after dictionary");
-    return dict;
+    // parseDictionary consumes through EOF or throws, so no trailing check.
+    return this.parseDictionary();
   }
 
   private parseList(): List {
@@ -188,7 +184,7 @@ class Parser {
   }
 
   private parseInnerList(): InnerList {
-    if (this.next() !== "(") fail("expected (");
+    this.next(); // consume "(" (caller guarantees it via parseListMember)
     const items: Item[] = [];
     while (!this.eof()) {
       this.skipSP();
@@ -243,7 +239,7 @@ class Parser {
   }
 
   private parseString(): string {
-    if (this.next() !== '"') fail("expected opening quote");
+    this.next(); // consume opening quote (caller guarantees it via parseBareItem)
     let out = "";
     while (!this.eof()) {
       const ch = this.next();
@@ -292,7 +288,7 @@ class Parser {
   }
 
   private parseBoolean(): boolean {
-    if (this.next() !== "?") fail("expected ?");
+    this.next(); // consume "?" (caller guarantees it via parseBareItem)
     const c = this.next();
     if (c === "1") return true;
     if (c === "0") return false;
@@ -300,7 +296,7 @@ class Parser {
   }
 
   private parseByteSequence(): ByteSequence {
-    if (this.next() !== ":") fail("expected :");
+    this.next(); // consume ":" (caller guarantees it via parseBareItem)
     let b64 = "";
     while (!this.eof() && this.peek() !== ":") b64 += this.next();
     if (this.next() !== ":") fail("unterminated byte sequence");

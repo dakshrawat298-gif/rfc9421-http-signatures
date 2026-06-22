@@ -37,6 +37,19 @@ function trimOWS(value: string): string {
   return value.replace(/^[ \t]+/, "").replace(/[ \t]+$/, "");
 }
 
+/**
+ * Re-encode a query parameter name/value for `@query-param` (RFC 9421 §2.2.8
+ * step 2). The names/values are first parsed as application/x-www-form-urlencoded
+ * (which `URLSearchParams` does on read — `+` and `%XX` are decoded), then
+ * re-encoded. The normative §2.2.8 examples encode space as `%20` and newline as
+ * `%0A` (e.g. `bar=with+plus+whitespace` -> `with%20plus%20whitespace`), i.e.
+ * exactly `encodeURIComponent`. This deliberately differs from the WHATWG form
+ * *serializer*, which emits `+` for space; the RFC examples use `%20`.
+ */
+function encodeQueryComponent(value: string): string {
+  return encodeURIComponent(value);
+}
+
 /** Convert a public {@link ComponentSpec} into an SFV component-identifier Item. */
 export function toComponentItem(spec: ComponentSpec): Item {
   if (typeof spec === "string") {
@@ -127,8 +140,18 @@ function derivedValue(message: HttpMessage, item: Item, name: string): string {
       if (typeof pname !== "string") {
         throw new UnsupportedComponentError("@query-param requires a name parameter");
       }
-      const value = url.searchParams.get(pname);
-      if (value === null) {
+      // RFC 9421 §2.2.8: the `name` identifier and the component value are both
+      // the *re-encoded* strings. URLSearchParams iteration yields the decoded
+      // name/value (form parsing, step 1); encodeQueryComponent re-encodes
+      // (step 2). Match on the re-encoded name, emit the re-encoded value.
+      let value: string | undefined;
+      for (const [n, v] of url.searchParams) {
+        if (encodeQueryComponent(n) === pname) {
+          value = encodeQueryComponent(v);
+          break;
+        }
+      }
+      if (value === undefined) {
         throw new UnsupportedComponentError(`@query-param;name="${pname}" is not present`);
       }
       return value;

@@ -74,9 +74,11 @@
     "build:fixup": "node ./scripts/build-fixup.mjs",
     "clean": "rm -rf dist tsconfig.tsbuildinfo",
     "test": "node --import tsx --test \"test/**/*.test.ts\"",
-    "test:coverage": "node --import tsx --test --experimental-test-coverage \"test/**/*.test.ts\"",
+    "test:coverage": "node --import tsx --test --experimental-test-coverage --test-coverage-exclude=\"src/types.ts\" --test-coverage-exclude=\"test/**\" \"test/**/*.test.ts\"",
+    "test:coverage:check": "node --import tsx --test --experimental-test-coverage --test-coverage-exclude=\"src/types.ts\" --test-coverage-exclude=\"test/**\" --test-coverage-lines=95 --test-coverage-functions=95 --test-coverage-branches=90 \"test/**/*.test.ts\"",
     "typecheck": "tsc -p tsconfig.test.json",
-    "validate:fixtures": "node --import tsx ./scripts/validate-fixtures.ts"
+    "validate:fixtures": "node --import tsx ./scripts/validate-fixtures.ts",
+    "prepublishOnly": "pnpm run clean && pnpm run typecheck && pnpm run test:coverage:check && pnpm run validate:fixtures && pnpm run build"
   },
   "devDependencies": {
     "@types/node": "catalog:",

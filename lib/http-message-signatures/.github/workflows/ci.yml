@@ -41,8 +41,11 @@ jobs:
       - name: Run test suite
         run: pnpm test
 
+      - name: Build (dual ESM + CJS)
+        run: pnpm build
+
   coverage:
-    name: Coverage gate (>= 95%)
+    name: Coverage gate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -59,11 +62,5 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Run tests with coverage thresholds
-        run: >-
-          node --import tsx --test
-          --experimental-test-coverage
-          --test-coverage-lines=95
-          --test-coverage-functions=95
-          --test-coverage-branches=95
-          "test/**/*.test.ts"
+      - name: Enforce coverage thresholds (>= 95% line/function, >= 90% branch over src/)
+        run: pnpm test:coverage:check

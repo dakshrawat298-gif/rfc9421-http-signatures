@@ -44,14 +44,34 @@ function isInnerList(member: ListMember): member is InnerList {
   return "items" in member;
 }
 
-function paramString(params: InnerList["params"], key: string): string | undefined {
+/**
+ * RFC 9421 §2.3: `alg`, `keyid`, `nonce`, and `tag` are String values. A
+ * parameter that is present but carries any other Structured Field type (Token,
+ * Integer, Boolean, Byte Sequence, …) is malformed — silently ignoring it would
+ * open an algorithm-confusion downgrade (e.g. `alg` smuggled as a bare Token so
+ * the allow-list never sees it).
+ */
+function strictString(params: InnerList["params"], key: string): string | undefined {
+  if (!params.has(key)) return undefined;
   const v = params.get(key);
-  return typeof v === "string" ? v : undefined;
+  if (typeof v !== "string") {
+    throw new MalformedSignatureError(`@signature-params "${key}" must be a String`);
+  }
+  return v;
 }
 
-function paramNumber(params: InnerList["params"], key: string): number | undefined {
+/**
+ * RFC 9421 §2.3: `created` and `expires` are Integer values. A Decimal or any
+ * non-integer is malformed; accepting it as "absent" would silently bypass the
+ * freshness/expiry checks.
+ */
+function strictInteger(params: InnerList["params"], key: string): number | undefined {
+  if (!params.has(key)) return undefined;
   const v = params.get(key);
-  return typeof v === "number" ? v : undefined;
+  if (typeof v !== "number" || !Number.isInteger(v)) {
+    throw new MalformedSignatureError(`@signature-params "${key}" must be an Integer`);
+  }
+  return v;
 }
 
 interface ParsedSignature {
@@ -103,7 +123,7 @@ function parseSignatures(message: HttpMessage): ParsedSignature[] {
       throw new MalformedSignatureError(`Signature "${label}" is not a byte sequence`);
     }
 
-    const algRaw = paramString(member.params, "alg");
+    const algRaw = strictString(member.params, "alg");
     let alg: SignatureAlgorithm | undefined;
     if (algRaw !== undefined) {
       if (!isSupportedAlgorithm(algRaw)) {
@@ -116,12 +136,12 @@ function parseSignatures(message: HttpMessage): ParsedSignature[] {
       label,
       inner: member,
       signatureBytes: sigMember.value.bytes,
-      created: paramNumber(member.params, "created"),
-      expires: paramNumber(member.params, "expires"),
-      keyid: paramString(member.params, "keyid"),
+      created: strictInteger(member.params, "created"),
+      expires: strictInteger(member.params, "expires"),
+      keyid: strictString(member.params, "keyid"),
       alg,
-      nonce: paramString(member.params, "nonce"),
-      tag: paramString(member.params, "tag"),
+      nonce: strictString(member.params, "nonce"),
+      tag: strictString(member.params, "tag"),
       coveredComponents: member.items.map(coveredComponentId),
     });
   }
@@ -135,8 +155,15 @@ function checkPolicy(
 ): string | undefined {
   const tolerance = policy.clockTolerance ?? 5;
 
-  if (policy.allowedAlgorithms && sig.alg !== undefined && !policy.allowedAlgorithms.includes(sig.alg)) {
-    return `algorithm ${sig.alg} is not allowed by policy`;
+  if (policy.allowedAlgorithms) {
+    // An allow-list cannot be enforced against a signature that declines to
+    // state its algorithm, so refuse rather than silently waive the check.
+    if (sig.alg === undefined) {
+      return "policy restricts algorithms but the signature does not state one";
+    }
+    if (!policy.allowedAlgorithms.includes(sig.alg)) {
+      return `algorithm ${sig.alg} is not allowed by policy`;
+    }
   }
 
   if (policy.requiredCoveredComponents) {
@@ -153,7 +180,10 @@ function checkPolicy(
     return "signature created timestamp is in the future";
   }
 
-  if (policy.maxAgeSeconds !== undefined && sig.created !== undefined) {
+  if (policy.maxAgeSeconds !== undefined) {
+    if (sig.created === undefined) {
+      return "policy enforces a maximum age but the signature has no created timestamp";
+    }
     if (now - sig.created > policy.maxAgeSeconds + tolerance) {
       return "signature exceeds the maximum accepted age";
     }
@@ -185,6 +215,30 @@ async function verifyOne(
   const policyReason = checkPolicy(sig, policy, now);
   if (policyReason !== undefined) {
     return { valid: false, label: sig.label, reason: policyReason, coveredComponents: sig.coveredComponents };
+  }
+
+  // Replay defense (RFC 9421 §7.2.2): the application-supplied nonce hook is the
+  // single-use gate. It is declared on the policy, so it MUST be honored.
+  if (policy.nonceVerify) {
+    let accepted: boolean;
+    try {
+      accepted = await policy.nonceVerify(sig.nonce);
+    } catch (cause) {
+      return {
+        valid: false,
+        label: sig.label,
+        reason: `nonce verification errored: ${cause instanceof Error ? cause.message : String(cause)}`,
+        coveredComponents: sig.coveredComponents,
+      };
+    }
+    if (!accepted) {
+      return {
+        valid: false,
+        label: sig.label,
+        reason: "nonce rejected by policy (possible replay)",
+        coveredComponents: sig.coveredComponents,
+      };
+    }
   }
 
   let key: VerifyingKey | null | undefined;
