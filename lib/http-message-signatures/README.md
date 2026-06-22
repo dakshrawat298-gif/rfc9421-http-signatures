@@ -60,9 +60,9 @@ import { webcrypto } from "node:crypto";
 import {
   signMessage,
   verifyMessage,
+  createVerifyingKey,
   type RequestLike,
   type SigningKey,
-  type VerifyingKey,
 } from "@interledger-aligned/http-message-signatures";
 
 const ALG = "ed25519" as const;
@@ -81,10 +81,9 @@ const signingKey: SigningKey = {
     new Uint8Array(await webcrypto.subtle.sign({ name: "Ed25519" }, pair.privateKey, data)),
 };
 
-const verifyingKey: VerifyingKey = {
-  algs: [ALG],
-  verify: (data, sig) => webcrypto.subtle.verify({ name: "Ed25519" }, pair.publicKey, sig, data),
-};
+// The library owns the verification primitive for raw keys (key usage, per-alg
+// parameters, and ECDSA r||s encoding) — mirroring the raw-key signing path.
+const verifyingKey = createVerifyingKey(pair.publicKey, ALG);
 
 const request: RequestLike = {
   method: "POST",
@@ -120,6 +119,12 @@ console.log(result.valid); // true
 - **Signing requires an explicit algorithm** — either carried by a `SigningKey`
   (which bundles its `alg`), or via the `alg` option when passing a raw
   `CryptoKey`. There is no default.
+- **Verification crypto is library-owned for raw keys.** `createVerifyingKey(key, alg)`
+  binds a raw WebCrypto `CryptoKey` to one registered algorithm and performs the
+  `subtle.verify` internally — applying the correct per-algorithm parameters and
+  the IEEE P1363 `r||s` ECDSA encoding — so callers don't reimplement (and
+  potentially mis-encode) the verification primitive. A custom `VerifyingKey`
+  remains accepted for callers with bespoke key backends (e.g. HSM/KMS).
 - **Verification is policy-driven.** Callers supply a `keyLookup` plus a
   `VerifierPolicy` describing accepted algorithms, required covered components,
   freshness window (`maxAgeSeconds`, `clockTolerance`), `requireExpires`, an

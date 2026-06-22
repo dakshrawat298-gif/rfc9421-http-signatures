@@ -15,7 +15,7 @@ import {
   coveredComponentId,
   toComponentItem,
 } from "./base.js";
-import { isSupportedAlgorithm } from "./crypto.js";
+import { getSubtle, isSupportedAlgorithm, webcryptoSignParams } from "./crypto.js";
 import {
   ByteSequence,
   parseDictionary,
@@ -24,6 +24,7 @@ import {
   type ListMember,
 } from "./sfv.js";
 import type {
+  CryptoKey,
   HttpMessage,
   SignatureAlgorithm,
   VerifierPolicy,
@@ -33,6 +34,33 @@ import type {
 } from "./types.js";
 
 const te = new TextEncoder();
+
+/**
+ * Build a {@link VerifyingKey} from a raw WebCrypto {@link CryptoKey} bound to a
+ * single registered algorithm. The verification primitive — key usage, the
+ * per-algorithm WebCrypto parameters, and the IEEE P1363 `r||s` signature
+ * encoding that WebCrypto requires for ECDSA (RFC 9421 §3.3.4) — is owned by the
+ * library, mirroring the raw-key signing path in {@link signMessage}. A
+ * CryptoKey corresponds to exactly one registered algorithm, so the permitted
+ * set is `[alg]`, which preserves the §3.2 algorithm-downgrade defense.
+ */
+export function createVerifyingKey(key: CryptoKey, alg: SignatureAlgorithm): VerifyingKey {
+  if (!isSupportedAlgorithm(alg)) {
+    throw new UnsupportedAlgorithmError(`unsupported algorithm: ${String(alg)}`);
+  }
+  const params = webcryptoSignParams(alg);
+  return {
+    algs: [alg],
+    async verify(data: Uint8Array, signature: Uint8Array): Promise<boolean> {
+      const d = new Uint8Array(data.byteLength);
+      d.set(data);
+      const s = new Uint8Array(signature.byteLength);
+      s.set(signature);
+      const subtle = await getSubtle();
+      return subtle.verify(params, key, s, d);
+    },
+  };
+}
 
 function headerValue(headers: HttpMessage["headers"], name: string): string | undefined {
   const raw = headers[name];

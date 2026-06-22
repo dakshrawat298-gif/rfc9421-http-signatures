@@ -8,7 +8,7 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
 
-import { verifyMessage } from "../src/verify.js";
+import { verifyMessage, createVerifyingKey } from "../src/verify.js";
 import { MalformedSignatureError, UnsupportedAlgorithmError } from "../src/errors.js";
 import type { HttpMessage, RequestLike, VerifierPolicy, VerifyingKey } from "../src/types.js";
 
@@ -178,5 +178,19 @@ describe("verifyMessage: label, key, base, and verify outcomes", () => {
     });
     assert.equal(result.valid, false);
     assert.match(result.reason ?? "", /signature verification failed/);
+  });
+});
+
+describe("createVerifyingKey", () => {
+  test("rejects an unsupported algorithm", () => {
+    assert.throws(
+      () => createVerifyingKey({} as unknown as CryptoKey, "rsa-pss-sha384" as never),
+      UnsupportedAlgorithmError,
+    );
+  });
+
+  test("binds the permitted algorithm set to the single algorithm", () => {
+    const vk = createVerifyingKey({} as unknown as CryptoKey, "ed25519");
+    assert.deepEqual(vk.algs, ["ed25519"]);
   });
 });

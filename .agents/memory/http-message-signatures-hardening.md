@@ -68,3 +68,31 @@ validates the RFC 8941 token grammar (ALPHA/`*` start, tchar/`:`/`/` rest).
 producing signatures that don't match what the caller asked for — a correctness
 and cross-impl risk. Parsing strictness without serialization strictness is a
 half-measure flagged in review.
+
+# Sign and verify must be symmetric: own the raw-key crypto on both sides
+
+The sign path accepts a raw `CryptoKey` (+ explicit `alg`) and does the
+WebCrypto work in-library. The verify path MUST offer the equivalent — a
+library-owned `createVerifyingKey(key, alg)` factory — not just a
+caller-supplied `VerifyingKey.verify()` callback.
+
+**Why:** Delegating verification entirely to caller callbacks pushes
+RFC-correctness (per-alg params, key usage, and especially ECDSA's IEEE P1363
+`r||s` signature encoding that WebCrypto mandates) out of the library, where
+each caller can silently get it wrong. An asymmetry where sign is library-owned
+but verify is delegated was flagged as a compliance/reliability gap in review.
+A single `CryptoKey` maps to exactly one registered algorithm, so the factory
+binds `algs: [alg]`, which also preserves the §3.2 downgrade defense. Keep the
+custom-`VerifyingKey` escape hatch for HSM/KMS backends.
+
+# Library workflow lives at repo ROOT, package-filtered
+
+The GitHub Actions workflow for a package in this pnpm monorepo must live at the
+repo-root `.github/workflows/`, and every step must call
+`pnpm --filter <pkg-name> <script>` (or set `working-directory`).
+
+**Why:** GitHub Actions only discovers workflows under the repository-root
+`.github/workflows/`; one nested under `lib/<pkg>/.github/workflows/` never
+runs. And bare `pnpm <script>` from the repo root fails with "Command not
+found" because the package scripts aren't defined at the workspace root. Both
+mistakes silently disable the CI/coverage gate. Flagged in review.

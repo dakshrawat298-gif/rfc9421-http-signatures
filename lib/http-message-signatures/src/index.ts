@@ -9,7 +9,7 @@
 export * from "./errors.js";
 export * from "./types.js";
 export { createSignatureBase, signMessage } from "./sign.js";
-export { verifyMessage } from "./verify.js";
+export { verifyMessage, createVerifyingKey } from "./verify.js";
 
 export {
   Token,

@@ -17,9 +17,9 @@ import { webcrypto } from "node:crypto";
 import {
   signMessage,
   verifyMessage,
+  createVerifyingKey,
   type RequestLike,
   type SigningKey,
-  type VerifyingKey,
 } from "../src/index.js";
 
 const ALG = "ed25519" as const;
@@ -38,10 +38,9 @@ const signingKey: SigningKey = {
   sign: async (data) => new Uint8Array(await webcrypto.subtle.sign({ name: "Ed25519" }, pair.privateKey, data)),
 };
 
-const verifyingKey: VerifyingKey = {
-  algs: [ALG],
-  verify: (data, signature) => webcrypto.subtle.verify({ name: "Ed25519" }, pair.publicKey, signature, data),
-};
+// The library owns the verification primitive for raw keys (key usage, per-alg
+// WebCrypto parameters, and ECDSA `r||s` encoding) — mirroring the signing path.
+const verifyingKey = createVerifyingKey(pair.publicKey, ALG);
 
 // 2. The request to protect.
 const request: RequestLike = {
