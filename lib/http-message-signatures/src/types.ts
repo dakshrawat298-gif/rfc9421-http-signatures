@@ -9,10 +9,8 @@
  *  - §3.2   verification + policy
  */
 
-import type { webcrypto } from "node:crypto";
-
-/** WebCrypto key handle (Node 18+ / browser). */
-export type CryptoKey = webcrypto.CryptoKey;
+/** WebCrypto key handle (browsers, Deno, edge runtimes, Node 18+). */
+export type CryptoKey = globalThis.CryptoKey;
 
 /**
  * Registered signature algorithms (RFC 9421 §3.3 / §6.2.2).

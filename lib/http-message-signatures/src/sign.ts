@@ -2,12 +2,10 @@
  * Public signer — subpath `/sign` (RFC 9421 §3.1, §4.1–4.2).
  */
 
-import { webcrypto } from "node:crypto";
-
 import { UnsupportedAlgorithmError } from "./errors.js";
 import { buildSignatureBase, serializeSignatureParams, toComponentItem } from "./base.js";
 import { ByteSequence, serializeItem } from "./sfv.js";
-import { webcryptoSignParams } from "./crypto.js";
+import { getSubtle, webcryptoSignParams } from "./crypto.js";
 import type {
   ComponentSpec,
   CryptoKey,
@@ -34,7 +32,8 @@ async function rawSign(
 ): Promise<Uint8Array> {
   const input = new Uint8Array(data.byteLength);
   input.set(data);
-  const sig = await webcrypto.subtle.sign(webcryptoSignParams(alg), key, input);
+  const subtle = await getSubtle();
+  const sig = await subtle.sign(webcryptoSignParams(alg), key, input);
   return new Uint8Array(sig);
 }
 

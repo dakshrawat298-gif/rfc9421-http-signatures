@@ -91,6 +91,18 @@ describe("checkPolicy: each rejection reason", () => {
       /required covered component/,
     );
   });
+
+  test("invalid clockTolerance is rejected deterministically", async () => {
+    for (const bad of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      await assert.rejects(
+        verifyMessage(withSig(`sig=("@method");created=${CREATED}`, SIG), {
+          ...noKey,
+          policy: { clockTolerance: bad },
+        }),
+        /clockTolerance must be a finite, non-negative number/,
+      );
+    }
+  });
 });
 
 describe("verifyMessage: label, key, base, and verify outcomes", () => {

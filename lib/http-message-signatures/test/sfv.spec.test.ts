@@ -88,9 +88,12 @@ describe("SFV: malformed input is rejected (RFC 8941 §4.2)", () => {
     assert.throws(() => parseItem("123 garbage"));
   });
 
-  test("duplicate dictionary keys: last value wins per §4.2.2", () => {
-    const dict = parseDictionary("a=1, a=2");
-    assert.equal(serializeDictionary(dict), "a=2");
+  test("duplicate dictionary keys are rejected (strict parsing)", () => {
+    assert.throws(() => parseDictionary("a=1, a=2"), /duplicate dictionary key/);
+  });
+
+  test("duplicate parameter keys are rejected (strict parsing)", () => {
+    assert.throws(() => parseDictionary("a=1;x=1;x=2"), /duplicate parameter key/);
   });
 
   test("lone backslash escape in string throws", () => {

@@ -148,12 +148,22 @@ function parseSignatures(message: HttpMessage): ParsedSignature[] {
   return parsed;
 }
 
+function resolveClockTolerance(value: number | undefined): number {
+  if (value === undefined) return 5;
+  if (!Number.isFinite(value) || value < 0) {
+    throw new RangeError(
+      `policy.clockTolerance must be a finite, non-negative number of seconds (received ${String(value)})`,
+    );
+  }
+  return value;
+}
+
 function checkPolicy(
   sig: ParsedSignature,
   policy: VerifierPolicy,
   now: number,
 ): string | undefined {
-  const tolerance = policy.clockTolerance ?? 5;
+  const tolerance = resolveClockTolerance(policy.clockTolerance);
 
   if (policy.allowedAlgorithms) {
     // An allow-list cannot be enforced against a signature that declines to

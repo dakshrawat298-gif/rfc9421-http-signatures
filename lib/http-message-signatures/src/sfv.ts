@@ -173,6 +173,9 @@ class Parser {
       } else {
         member = { value: true, params: this.parseParameters() };
       }
+      // Strict parsing: a repeated key is ambiguous in a security-sensitive
+      // context, so reject rather than silently letting the last value win.
+      if (dict.has(key)) fail(`duplicate dictionary key: ${key}`);
       dict.set(key, member);
       this.skipOWS();
       if (this.eof()) break;
@@ -215,6 +218,7 @@ class Parser {
         this.i += 1;
         value = this.parseBareItem();
       }
+      if (params.has(key)) fail(`duplicate parameter key: ${key}`);
       params.set(key, value);
     }
     return params;
