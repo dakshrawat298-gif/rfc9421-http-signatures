@@ -9,6 +9,9 @@ on:
 permissions:
   contents: read
 
+env:
+  PKG: "@interledger-aligned/http-message-signatures"
+
 jobs:
   test:
     name: Test (Node ${{ matrix.node }})
@@ -33,16 +36,16 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Type-check
-        run: pnpm typecheck
+        run: pnpm --filter "$PKG" typecheck
 
       - name: Validate RFC 9421 fixtures
-        run: pnpm validate:fixtures
+        run: pnpm --filter "$PKG" validate:fixtures
 
       - name: Run test suite
-        run: pnpm test
+        run: pnpm --filter "$PKG" test
 
       - name: Build (dual ESM + CJS)
-        run: pnpm build
+        run: pnpm --filter "$PKG" build
 
   coverage:
     name: Coverage gate
@@ -63,4 +66,4 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Enforce coverage thresholds (>= 95% line/function, >= 90% branch over src/)
-        run: pnpm test:coverage:check
+        run: pnpm --filter "$PKG" test:coverage:check
