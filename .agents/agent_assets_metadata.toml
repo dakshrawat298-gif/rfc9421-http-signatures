@@ -1,8 +1,0 @@
-uploads = []
-generated = []
-
-[[outputs]]
-id = "aDoC5XGkCRKMqAFlzZQPm"
-uri = "file://PROOF_SOURCE_CODE.md"
-type = "text"
-title = "PROOF_SOURCE_CODE.md — Verbatim Source Evidence"

@@ -47,3 +47,10 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# AI/grant scratch & agent state
+AUDIT_REPORT.md
+PROOF_SOURCE_CODE.md
+lib/http-message-signatures/GRANT_SUBMISSION_AUDIT_REPORT.md
+.agents/
+attached_assets/

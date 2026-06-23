@@ -1,5 +1,0 @@
-- [WebCrypto algorithm types under @types/node](webcrypto-node-types.md) — they live in the `webcrypto` namespace, not as globals; don't derive them via `Parameters<typeof subtle.X>`.
-- [Node test coverage thresholds are percentages](node-test-coverage-thresholds.md) — `--test-coverage-lines=95` means 95%; `0.95` is effectively no gate.
-- [http-message-signatures hardening](http-message-signatures-hardening.md) — cross-runtime WebCrypto via getSubtle (prefer globalThis.crypto.subtle, node fallback), strict SFV duplicate-key rejection, clockTolerance validation.
-- [Coverage gate vs type-only files](coverage-gate-type-only-files.md) — type-only TS files report ~0% and tank the aggregate; exclude them + `test/**`; trust percentages not line numbers (tsx sourcemaps).
-- [RFC 9421 @query-param encoding](rfc9421-query-param-encoding.md) — value/name use percent-encoding (space→%20), never `+`; iterate searchParams (decoded) then re-encode.
