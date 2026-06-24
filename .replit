@@ -1,3 +1,4 @@
+modules = ["nodejs-18"]
 [agent]
 expertMode = true
 
