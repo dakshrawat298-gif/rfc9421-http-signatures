@@ -52,7 +52,7 @@ npm install @interledger-aligned/http-message-signatures
 
 The example below signs a request with an Ed25519 key and verifies it under a
 strict policy. It is the same flow as the runnable
-[`examples/sign-and-verify.ts`](./examples/sign-and-verify.ts) (modeled on
+[`examples/sign-and-verify.ts`](./lib/http-message-signatures/examples/sign-and-verify.ts) (modeled on
 RFC 9421 Appendix B.2); run it with `node --import tsx examples/sign-and-verify.ts`.
 
 ```ts
@@ -180,10 +180,10 @@ pnpm validate:fixtures     # prove the Appendix B fixtures against the RFC keys
 pnpm build                 # emit dual ESM + CJS builds with type declarations
 ```
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for the workflow and
-[SECURITY.md](./SECURITY.md) for the security model and reporting process.
+See [CONTRIBUTING.md](./lib/http-message-signatures/CONTRIBUTING.md) for the workflow and
+[SECURITY.md](./lib/http-message-signatures/SECURITY.md) for the security model and reporting process.
 
 ## License
 
 [Apache-2.0](./LICENSE). Test vectors and example messages reproduced from
-RFC 9421 are Code Components under the Revised BSD License — see [NOTICE](./NOTICE).
+RFC 9421 are Code Components under the Revised BSD License — see [NOTICE](./lib/http-message-signatures/NOTICE).
